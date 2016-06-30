@@ -17,12 +17,30 @@ def Click():
     global pos
     while(True):
         if clicks:
-            clickSpot()
+            clickSpot(pos)
             threading._sleep(click_speed)
 
-def clickSpot():
-    global pos
-    global pwin #helal la
+def SearchAndClick(img_template):
+    global border_compensation
+    while(True):
+        start = time.time()
+        print "Searching for rubies!", time.ctime()
+        im = createPILImage(captureScreen(hWnd))
+        result = find_subimage(im.crop((int(im.width * 0.33), 0, im.width, im.height)), "test_cases/click_thingie_cut.png") # crop img to find template faster.
+        end = time.time()
+        if result:
+            print "Found one at", ((result[0] + result[2]) / 2, (result[1] + result[3]) / 2)
+            clickSpot(SetWord(((result[0] + result[2]) / 2) - border_compensation[0] + int(im.width * 0.33)\
+                          , ((result[1] + result[3]) / 2 - border_compensation[1]))) # added width * 0.33 back to compensate for the cropped area.
+            #im.save(time.ctime().replace(':', '-') + "Found at " + str(result) + ".png")
+        else:
+            print "Could not find one"
+            #im.save(time.ctime().replace(':', '-') + " - Not Found.png")
+        print "Search time: ", (end - start), "seconds"
+
+
+def clickSpot(pos):
+    global pwin
     pwin.PostMessage(win32con.WM_LBUTTONDOWN, 0, pos)
     pwin.PostMessage(win32con.WM_LBUTTONUP, 0, pos)
 
@@ -65,8 +83,6 @@ def createPILImage(bits):
 
 #clickSpot()
 
-
-
 def iter_rows(pil_image):
     """Yield tuple of pixels for each row in the image.
 
@@ -81,12 +97,6 @@ def iter_rows(pil_image):
     iterator = izip(*(iter(pil_image.getdata()),) * pil_image.width)
     for row in iterator:
         yield row
-
-# TODO: 
-# Find the top-left-most non-alpha pixel for the sub-image
-# Use that as ann offset for the control-frame
-# And follow an approach similar to the one below with opacity and similarity thresholds.
-
 
 def find_subimage(large_image, subimg_path):
     """
@@ -119,8 +129,7 @@ def find_subimage(large_image, subimg_path):
 
     # Look for first row in large_image, then crop and compare pixel arrays.
     for y_pos, row in enumerate(iter_rows(large_image)):
-        print y_pos, "out of", large_image.height - 1
-
+        #print y_pos, "out of", large_image.height - 1
         # filter the sub_image's first row applying pixel comparison.
         a = filter(lambda px : not any([pix_cmp(bg, px) for bg in set(row)]), si_first_row_set)
         #if si_first_row_set - set(row):
@@ -129,14 +138,14 @@ def find_subimage(large_image, subimg_path):
         for x_pos in range(large_image.width - si_width + 1):
             if not pix_cmp(row[x_pos], si_first_pixel):
                 continue  # Pixel does not match.
-            print "First row match %"
+            #print "First row match %"
             if not matchLists(row[x_pos:x_pos + si_width], si_first_row, 0.8, 0.8):
                 continue  # First row does not match.
             box = x_pos, y_pos - y_offset, x_pos + si_width, y_pos - y_offset + si_height
             with large_image.crop(box) as cropped:
                 if matchLists(list(cropped.getdata()), si_pixels, 0.8, 0.8):
                     # We found our match!
-                    return x_pos, y_pos
+                    return x_pos, y_pos, x_pos+si_width, y_pos+si_height
 
 def matchLists(image, template, opacity_threshold = 1.0, similarity_threshold = 1.0):
     """ Compare two pixel lists. Instead of a direct subtraction,
@@ -150,15 +159,18 @@ def matchLists(image, template, opacity_threshold = 1.0, similarity_threshold = 
         :return: True if two lists match within the given thresholds. False if not.
         :rtype : bool
     """
-    pass_threshold = int(len(template) * similarity_threshold)
+    viable_pixels = 0
     match_count = 0
     for i in range(len(template)):
         px_img = image[i]
         px_tmp = template[i]
         alpha_tmp = (px_tmp[3] / 256.0) if len(px_tmp) > 3 else 1
-        match_count += int((alpha_tmp < opacity_threshold) or (pix_cmp(px_img, px_tmp)))
+        match_count += int((alpha_tmp >= opacity_threshold) and (pix_cmp(px_img, px_tmp)))
+        viable_pixels += 1 if (alpha_tmp > opacity_threshold) else 0
         
-    print (float(match_count) / pass_threshold) * 100, "%"
+    #print (float(match_count) / viable_pixels) * 100, "%"
+    #print "with", viable_pixels, "viable pixels"
+    pass_threshold = int(viable_pixels * similarity_threshold)
     return match_count >= pass_threshold
 
 def pix_cmp(background, template):
@@ -175,18 +187,29 @@ def pix_cmp(background, template):
         return background[:3] == template
 
 if __name__ == "__main__":
-    clicks = True
+    clicks = False
     click_speed = 0.02;
     pos = SetWord(700,400)
+    # Device context from win32api somehow gets the ss with an offset.
+    # But the click spot coordinates start precisely at applications (0,0)
+    # So, this crappy solution should suffice for now.
+    border_compensation = (8,31) 
     pwin = win32ui.FindWindow(None, "Clicker Heroes")
     hWnd = win32gui.FindWindow(None, "Clicker Heroes")
 
 
-    t = threading.Thread(None, Click, "clicks")
-    #t.start()
+    clickThread = threading.Thread(None, Click, "clicks")
+    clickThread.start()
 
-    with Image.open("test_cases/sample_2.bmp") as bmp, bmp.convert(mode='RGB') as large_img:
-        print find_subimage(large_img, "test_cases/click_thingie.png")
+    rubySearch = threading.Thread(None, SearchAndClick, "rubySrc", args=("test_cases/click_thingie_cut.png", ))
+    rubySearch.start()
+
+    #with Image.open("test_cases/not_visible_big.png") as bmp, bmp.convert(mode='RGB') as large_img:
+    #    start = time.time()
+    #    result = find_subimage(large_img, "test_cases/click_thingie_cut.png")
+    #    end = time.time()
+    #    print result if bool(result) else "Nope!", end-start
+
 
 
     while(True):
@@ -201,6 +224,3 @@ if __name__ == "__main__":
                     click_speed = 0.02
                 else:
                     click_speed = float(inp[2])
-        elif inp[0] == "get":
-            im = createPILImage(captureScreen(hWnd))
-            im.save("lol.png", None)
