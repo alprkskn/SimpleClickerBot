@@ -65,12 +65,7 @@ def createPILImage(bits):
 
 #clickSpot()
 
-""" 
-    This part is from:
-    http://stackoverflow.com/a/36829325
 
-    with slight changes to find_subimage method
-"""
 
 def iter_rows(pil_image):
     """Yield tuple of pixels for each row in the image.
@@ -93,51 +88,91 @@ def iter_rows(pil_image):
 # And follow an approach similar to the one below with opacity and similarity thresholds.
 
 
-#def find_subimage(large_image, subimg_path):
-#    """Find subimg coords in large_image. Strip transparency for simplicity.
+def find_subimage(large_image, subimg_path):
+    """
+       From:
+       http://stackoverflow.com/a/36829325
+    """
+    """Find subimg coords in large_image. Strip transparency for simplicity.
 
-#    :param PIL.Image.Image large_image: Screen shot to search through.
-#    :param str subimg_path: Path to subimage file.
+    :param PIL.Image.Image large_image: Screen shot to search through.
+    :param str subimg_path: Path to subimage file.
 
-#    :return: X and Y coordinates of top-left corner of subimage.
-#    :rtype: tuple
-#    """
-#    # Load subimage into memory.
-#    with Image.open(subimg_path) as rgba, rgba.convert(mode='RGB') as subimg:
-#        si_pixels = list(rgba.getdata())
-#        si_width = subimg.width
-#        si_height = subimg.height
-#    si_first_row = tuple(si_pixels[:si_width])
-#    si_first_row_set = set(si_first_row)  # To speed up the search.
-#    si_first_pixel = si_first_row[0]
+    :return: X and Y coordinates of top-left corner of subimage.
+    :rtype: tuple
+    """
+    # Load subimage into memory.
+    with Image.open(subimg_path) as rgba, rgba.convert(mode='RGB') as subimg:
+        si_pixels = list(rgba.getdata())
+        si_width = subimg.width
+        si_height = subimg.height
 
-#    # Look for first row in large_image, then crop and compare pixel arrays.
-#    for y_pos, row in enumerate(iter_rows(large_image)):
-#        if matchSets(si_first_row_set, set(row)):
-#            continue  # Some pixels not found.
-#        for x_pos in range(large_image.width - si_width + 1):
-#            if row[x_pos] != si_first_pixel:
-#                continue  # Pixel does not match.
-#            if row[x_pos:x_pos + si_width] != si_first_row:
-#                continue  # First row does not match.
-#            box = x_pos, y_pos, x_pos + si_width, y_pos + si_height
-#            with large_image.crop(box) as cropped:
-#                if list(cropped.getdata()) == si_pixels:
-#                    # We found our match!
-#                    return x_pos, y_pos
+    # Find the first row with at least one opaque pixel
+    y_offset = 0
+    while y_offset < si_height:
+        si_first_row = tuple(si_pixels[y_offset*si_width:(y_offset+1)*si_width])
+        si_first_row_set = set(filter(lambda a : (a[3] > 210) if len(a) > 3 else True, si_first_row))
+        si_first_pixel = si_first_row[0]
+        if si_first_row_set:
+            break
+        y_offset += 1
 
-#def matchSets(lhs, rhs, opacity_threshold = 1.0, similarity_threshold = 1.0):
-#    """ Compare two pixel sets. Instead of a direct subtraction,
-#        this method applies an opacity and similarity treshold.
+    # Look for first row in large_image, then crop and compare pixel arrays.
+    for y_pos, row in enumerate(iter_rows(large_image)):
+        print y_pos, "out of", large_image.height - 1
 
-#        :param Left-hand side
-#        :param Right-hand side
-#        :param Alpha threshold for the pixels which will be taken into account for comparison.
-#        :param Similarity threshold for sets to be accepted as matching.
-#    """
-#    return not bool(lhs - rhs)
-#"""
-#"""
+        # filter the sub_image's first row applying pixel comparison.
+        a = filter(lambda px : not any([pix_cmp(bg, px) for bg in set(row)]), si_first_row_set)
+        #if si_first_row_set - set(row):
+        if a:
+            continue  # Some pixels not found.
+        for x_pos in range(large_image.width - si_width + 1):
+            if not pix_cmp(row[x_pos], si_first_pixel):
+                continue  # Pixel does not match.
+            print "First row match %"
+            if not matchLists(row[x_pos:x_pos + si_width], si_first_row, 0.8, 0.8):
+                continue  # First row does not match.
+            box = x_pos, y_pos - y_offset, x_pos + si_width, y_pos - y_offset + si_height
+            with large_image.crop(box) as cropped:
+                if matchLists(list(cropped.getdata()), si_pixels, 0.8, 0.8):
+                    # We found our match!
+                    return x_pos, y_pos
+
+def matchLists(image, template, opacity_threshold = 1.0, similarity_threshold = 1.0):
+    """ Compare two pixel lists. Instead of a direct subtraction,
+        this method applies an opacity and similarity treshold.
+
+        :param Left-hand side
+        :param Right-hand side
+        :param Alpha threshold for the pixels of the template which will be taken into account for comparison. (From 0.0 to 1.0)
+        :param Similarity threshold for lists to be accepted as matching. (From 0.0 to 1.0)
+
+        :return: True if two lists match within the given thresholds. False if not.
+        :rtype : bool
+    """
+    pass_threshold = int(len(template) * similarity_threshold)
+    match_count = 0
+    for i in range(len(template)):
+        px_img = image[i]
+        px_tmp = template[i]
+        alpha_tmp = (px_tmp[3] / 256.0) if len(px_tmp) > 3 else 1
+        match_count += int((alpha_tmp < opacity_threshold) or (pix_cmp(px_img, px_tmp)))
+        
+    print (float(match_count) / pass_threshold) * 100, "%"
+    return match_count >= pass_threshold
+
+def pix_cmp(background, template):
+    if len(template) == 4:
+        # template has alpha channel
+        oneMinusAlpha = 255 - template[3] #1 - (template[3] / 256.0)
+        #dr = abs(background[0] - template[0]) / float(template[0])
+        #dg = abs(background[1] - template[1]) / float(template[1])
+        #db = abs(background[2] - template[2]) / float(template[2])
+        return (abs(background[0] - template[0]) <= oneMinusAlpha)\
+                and (abs(background[1] - template[1]) <= oneMinusAlpha)\
+                and (abs(background[2] - template[2]) <= oneMinusAlpha)
+    else:
+        return background[:3] == template
 
 if __name__ == "__main__":
     clicks = True
@@ -146,13 +181,12 @@ if __name__ == "__main__":
     pwin = win32ui.FindWindow(None, "Clicker Heroes")
     hWnd = win32gui.FindWindow(None, "Clicker Heroes")
 
-    #ctypes.windll.user32.RegisterHotKey(None, 1, 0, win32con.VK_ESCAPE)
 
     t = threading.Thread(None, Click, "clicks")
     #t.start()
 
-    with Image.open("cilik.bmp") as bmp, bmp.convert(mode='RGB') as large_img:
-        print find_subimage(large_img, "click_thingie.png")
+    with Image.open("test_cases/sample_2.bmp") as bmp, bmp.convert(mode='RGB') as large_img:
+        print find_subimage(large_img, "test_cases/click_thingie.png")
 
 
     while(True):
@@ -170,14 +204,3 @@ if __name__ == "__main__":
         elif inp[0] == "get":
             im = createPILImage(captureScreen(hWnd))
             im.save("lol.png", None)
-
-
-    #try:
-    #    msg = ctypes.wintypes.MSG()
-    #    while ctypes.windll.user32.GetMessageA(ctypes.byref(msg), None, 0, 0) != 0:
-    #        if msg.message == win32con.WM_HOTKEY:
-    #            clicks = not clicks
-    #        ctypes.windll.user32.TranslateMessage(ctypes.byref(msg))
-    #        ctypes.windll.user32.DispatchMessageA(ctypes.byref(msg))
-    #finally:
-    #    ctypes.windll.user32.UnregisterHotKey(None,1)
