@@ -1,5 +1,10 @@
+# TODO: Seperate the files for controllers and the image processing methods.
+# TODO: Try to use pyramid for template matching.
+# TODO: Use a reference resolution for the image source. Template might not be
+#       useful for a higher resolution capture from the source.
+
 import win32api, win32con, ctypes, ctypes.wintypes, threading, time, win32ui, win32gui
-from PIL import Image
+from PIL import Image, ImageFilter
 from itertools import izip
 
 def SetWord(Low, Hi):
@@ -120,6 +125,10 @@ def find_subimage(large_image, subimg_path):
         si_width = subimg.width
         si_height = subimg.height
 
+    # TODO: Change that to find the row with the most opaque pixels.
+    #       And use that row for the pre-matching. And take that into consideration
+    #       when doing the complete match.
+    # TODO: Change method to be capable of searching in a specified boundary.
     # Find the first row with at least one opaque pixel
     y_offset = 0
     while y_offset < si_height:
@@ -209,7 +218,7 @@ if __name__ == "__main__":
     clickThread.start()
 
     rubySearch = threading.Thread(None, SearchAndClick, "rubySrc", args=("test_cases/click_thingie_cut.png", ))
-    rubySearch.start()
+    #rubySearch.start()
 
     #with Image.open("test_cases/not_visible_big.png") as bmp, bmp.convert(mode='RGB') as large_img:
     #    start = time.time()
