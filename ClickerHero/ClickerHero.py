@@ -22,6 +22,7 @@ def Click():
 
 def SearchAndClick(img_template):
     global border_compensation
+    global search_cooldown
     while(True):
         start = time.time()
         print "Searching for rubies!", time.ctime()
@@ -36,7 +37,9 @@ def SearchAndClick(img_template):
         else:
             print "Could not find one"
             #im.save(time.ctime().replace(':', '-') + " - Not Found.png")
+        elapsed = end - start
         print "Search time: ", (end - start), "seconds"
+        time.sleep(max(0, search_cooldown - elapsed));
 
 
 def clickSpot(pos):
@@ -190,6 +193,10 @@ if __name__ == "__main__":
     clicks = False
     click_speed = 0.02;
     pos = SetWord(700,400)
+
+    # Sets the max frequency for the image search thread.
+    search_cooldown = 120
+
     # Device context from win32api somehow gets the ss with an offset.
     # But the click spot coordinates start precisely at applications (0,0)
     # So, this crappy solution should suffice for now.
