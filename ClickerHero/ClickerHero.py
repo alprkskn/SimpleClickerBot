@@ -32,7 +32,7 @@ def SearchAndClick(img_template):
         start = time.time()
         print "Searching for rubies!", time.ctime()
         im = createPILImage(captureScreen(hWnd))
-        result = find_subimage(im.crop((int(im.width * 0.33), 0, im.width, im.height)), "test_cases/click_thingie_cut.png") # crop img to find template faster.
+        result = match_template(im.crop((int(im.width * 0.33), 0, im.width, im.height)), "test_cases/click_thingie_cut.png") # crop img to find template faster.
         end = time.time()
         if result:
             print "Found one at", ((result[0] + result[2]) / 2, (result[1] + result[3]) / 2)
