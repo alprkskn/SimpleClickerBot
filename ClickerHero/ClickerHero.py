@@ -218,7 +218,7 @@ if __name__ == "__main__":
     clickThread.start()
 
     rubySearch = threading.Thread(None, SearchAndClick, "rubySrc", args=("test_cases/click_thingie_cut.png", ))
-    #rubySearch.start()
+    rubySearch.start()
 
     #with Image.open("test_cases/not_visible_big.png") as bmp, bmp.convert(mode='RGB') as large_img:
     #    start = time.time()
