@@ -123,7 +123,11 @@ def iter_rows(pil_image):
     for row in iterator:
         yield row
 
-def find_subimage(large_image, subimg_path):
+def match_template(large_image, subimg_path):
+    with Image.open(subimg_path) as subimg:
+        return find_subimage(large_image, subimg)
+
+def find_subimage(large_image, subimg):
     """
        From:
        http://stackoverflow.com/a/36829325
@@ -137,10 +141,9 @@ def find_subimage(large_image, subimg_path):
     :rtype: tuple
     """
     # Load subimage into memory.
-    with Image.open(subimg_path) as rgba, rgba.convert(mode='RGB') as subimg:
-        si_pixels = list(rgba.getdata())
-        si_width = subimg.width
-        si_height = subimg.height
+    si_pixels = list(subimg.getdata())
+    si_width = subimg.width
+    si_height = subimg.height
 
     # TODO: Change that to find the row with the most opaque pixels.
     #       And use that row for the pre-matching. And take that into consideration
@@ -175,6 +178,22 @@ def find_subimage(large_image, subimg_path):
                 if matchLists(list(cropped.getdata()), si_pixels, 0.8, 0.8):
                     # We found our match!
                     return x_pos, y_pos, si_width, si_height
+
+def getImagePyramid(pilImage, max_depth=1):
+    """
+        Gets downsampled pyramid of a given PIL image
+        :param PIL image
+        :param Maximum downsampling depth
+
+        :return: A list of downsampled versions of the given image in decreasing size.
+    """
+    result = []
+    width = image.size[0]
+    height = image.size[1]
+    for exp in range(max_depth):
+        img = (image.resize((width/(2**exp), height/(2**exp))))
+        result.append(img)
+    return result
 
 def matchLists(image, template, opacity_threshold = 1.0, similarity_threshold = 1.0):
     """ Compare two pixel lists. Instead of a direct subtraction,
@@ -242,7 +261,7 @@ if __name__ == "__main__":
 
     #with Image.open("test_cases/not_visible_big.png") as bmp, bmp.convert(mode='RGB') as large_img:
     #    start = time.time()
-    #    result = find_subimage(large_img, "test_cases/click_thingie_cut.png")
+    #    result = match_template(large_img, "test_cases/click_thingie_cut.png")
     #    end = time.time()
     #    print result if bool(result) else "Nope!", end-start
 
