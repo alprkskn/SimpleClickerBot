@@ -25,7 +25,7 @@ def Click():
             clickSpot(pos)
             threading._sleep(click_speed)
 
-def SearchAndClick(img_template, search_box, click_offset):
+def SearchAndClick(img_template, search_box, click_offset, search_cooldown):
     """Search for the given template in a portion of the image and click with a given offset.
 
     :param str img_template: Path to the template image to be searched within the image.
@@ -34,10 +34,9 @@ def SearchAndClick(img_template, search_box, click_offset):
 
     """
     global border_compensation
-    global search_cooldown
     while(True):
         start = time.time()
-        print "Searching for rubies!", time.ctime(), "\n"
+        print "Searching for rubies!", time.ctime()
 
         capture = None
         while(capture == None):
@@ -45,18 +44,18 @@ def SearchAndClick(img_template, search_box, click_offset):
             time.sleep(2)
         im = createPILImage(capture)
         crop_box = (int(im.width * search_box[0]), int(im.height * search_box[1]), int(im.width * search_box[2]), int(im.height * search_box[3]))
-        result = find_subimage(im.crop(crop_box), img_template) # crop img to find template faster.
+        result = match_template(im.crop(crop_box), img_template) # crop img to find template faster.
         end = time.time()
         if result:
-            print "Found one at", (result[0], result[1]), "\n"
+            print "Found one at", (result[0], result[1])
             clickSpot(SetWord(int(result[0] + result[2] * click_offset[0]) - border_compensation[0] + crop_box[0]\
                           , (int(result[1] + result[3] * click_offset[1]) - border_compensation[1] + crop_box[1]))) # added width * 0.33 back to compensate for the cropped area.
             #im.save(time.ctime().replace(':', '-') + "Found at " + str(result) + ".png")
         else:
-            print "Could not find one.\n"
+            print "Could not find one."
             #im.save(time.ctime().replace(':', '-') + " - Not Found.png")
         elapsed = end - start
-        print "Search time: ", (end - start), "seconds.\n"
+        print "Search time: ", (end - start), "seconds."
         time.sleep(max(0, search_cooldown - elapsed));
 
 
@@ -253,10 +252,10 @@ if __name__ == "__main__":
     clickThread = threading.Thread(None, Click, "clicks")
     clickThread.start()
 
-    rubySearch = threading.Thread(None, SearchAndClick, "rubySrc", args=("test_cases/click_thingie_cut.png", (0.33, 0, 1, 1), (0.5, 0.5), ))
+    rubySearch = threading.Thread(None, SearchAndClick, "rubySrc", args=("test_cases/click_thingie_cut.png", (0.33, 0, 1, 1), (0.5, 0.5), 10, ))
     rubySearch.start()
 
-    dkSearch = threading.Thread(None, SearchAndClick, "dkSrc", args=("test_cases/DK_gilded_available.png", (0, 0, 0.5, 1), (0.1, 1.1), ))
+    dkSearch = threading.Thread(None, SearchAndClick, "dkSrc", args=("test_cases/DK_gilded_available.png", (0, 0, 1, 1), (0.1, 1.1), 30, ))
     dkSearch.start()
 
     #with Image.open("test_cases/not_visible_big.png") as bmp, bmp.convert(mode='RGB') as large_img:
