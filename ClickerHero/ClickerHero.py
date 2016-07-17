@@ -25,25 +25,38 @@ def Click():
             clickSpot(pos)
             threading._sleep(click_speed)
 
-def SearchAndClick(img_template):
+def SearchAndClick(img_template, search_box, click_offset):
+    """Search for the given template in a portion of the image and click with a given offset.
+
+    :param str img_template: Path to the template image to be searched within the image.
+    :param Tuple search_box: Borders of the area to be searched. A tuple defining the rect with normalized values. (left, upper, right, lower)
+    :param Tuple click_offset: The normalized offset from the top-left of the found position. 0.0 to 1.0 (x, y)
+
+    """
     global border_compensation
     global search_cooldown
     while(True):
         start = time.time()
-        print "Searching for rubies!", time.ctime()
-        im = createPILImage(captureScreen(hWnd))
-        result = find_subimage(im.crop((int(im.width * 0.33), 0, im.width, im.height)), "test_cases/click_thingie_cut.png") # crop img to find template faster.
+        print "Searching for rubies!", time.ctime(), "\n"
+
+        capture = None
+        while(capture == None):
+            capture = captureScreen(hWnd);
+            time.sleep(2)
+        im = createPILImage(capture)
+        crop_box = (int(im.width * search_box[0]), int(im.height * search_box[1]), int(im.width * search_box[2]), int(im.height * search_box[3]))
+        result = find_subimage(im.crop(crop_box), img_template) # crop img to find template faster.
         end = time.time()
         if result:
-            print "Found one at", ((result[0] + result[2]) / 2, (result[1] + result[3]) / 2)
-            clickSpot(SetWord(((result[0] + result[2]) / 2) - border_compensation[0] + int(im.width * 0.33)\
-                          , ((result[1] + result[3]) / 2 - border_compensation[1]))) # added width * 0.33 back to compensate for the cropped area.
+            print "Found one at", (result[0], result[1]), "\n"
+            clickSpot(SetWord(int(result[0] + result[2] * click_offset[0]) - border_compensation[0] + crop_box[0]\
+                          , (int(result[1] + result[3] * click_offset[1]) - border_compensation[1] + crop_box[1]))) # added width * 0.33 back to compensate for the cropped area.
             #im.save(time.ctime().replace(':', '-') + "Found at " + str(result) + ".png")
         else:
-            print "Could not find one"
+            print "Could not find one.\n"
             #im.save(time.ctime().replace(':', '-') + " - Not Found.png")
         elapsed = end - start
-        print "Search time: ", (end - start), "seconds"
+        print "Search time: ", (end - start), "seconds.\n"
         time.sleep(max(0, search_cooldown - elapsed));
 
 
@@ -55,11 +68,15 @@ def clickSpot(pos):
 # Captures the screen and returns a tuple containing
 # (bits, width, height)
 def captureScreen(handle):
-    # Get device context for the window    
-    dc = win32gui.GetWindowDC(handle)
-    # Create a temporary DC compatible with our window
-    dc_obj = win32ui.CreateDCFromHandle(dc)
-    mem_dc = dc_obj.CreateCompatibleDC()
+    try:
+        # Get device context for the window    
+        dc = win32gui.GetWindowDC(handle)
+        # Create a temporary DC compatible with our window
+        dc_obj = win32ui.CreateDCFromHandle(dc)
+        mem_dc = dc_obj.CreateCompatibleDC()
+    except:
+        print "DC Creation failed.", dc, dc_obj, mem_dc
+        return None
     # Get the client area for size calculation
     rect = win32gui.GetWindowRect(handle)
     width = rect[2] - rect[0]
@@ -116,7 +133,7 @@ def find_subimage(large_image, subimg_path):
     :param PIL.Image.Image large_image: Screen shot to search through.
     :param str subimg_path: Path to subimage file.
 
-    :return: X and Y coordinates of top-left corner of subimage.
+    :return: X and Y coordinates of top-left corner, width and height of subimage.
     :rtype: tuple
     """
     # Load subimage into memory.
@@ -157,7 +174,7 @@ def find_subimage(large_image, subimg_path):
             with large_image.crop(box) as cropped:
                 if matchLists(list(cropped.getdata()), si_pixels, 0.8, 0.8):
                     # We found our match!
-                    return x_pos, y_pos, x_pos+si_width, y_pos+si_height
+                    return x_pos, y_pos, si_width, si_height
 
 def matchLists(image, template, opacity_threshold = 1.0, similarity_threshold = 1.0):
     """ Compare two pixel lists. Instead of a direct subtraction,
@@ -204,7 +221,7 @@ if __name__ == "__main__":
     pos = SetWord(700,400)
 
     # Sets the max frequency for the image search thread.
-    search_cooldown = 120
+    search_cooldown = 10
 
     # Device context from win32api somehow gets the ss with an offset.
     # But the click spot coordinates start precisely at applications (0,0)
@@ -217,8 +234,11 @@ if __name__ == "__main__":
     clickThread = threading.Thread(None, Click, "clicks")
     clickThread.start()
 
-    rubySearch = threading.Thread(None, SearchAndClick, "rubySrc", args=("test_cases/click_thingie_cut.png", ))
-    #rubySearch.start()
+    rubySearch = threading.Thread(None, SearchAndClick, "rubySrc", args=("test_cases/click_thingie_cut.png", (0.33, 0, 1, 1), (0.5, 0.5), ))
+    rubySearch.start()
+
+    dkSearch = threading.Thread(None, SearchAndClick, "dkSrc", args=("test_cases/DK_gilded_available.png", (0, 0, 0.5, 1), (0.1, 1.1), ))
+    dkSearch.start()
 
     #with Image.open("test_cases/not_visible_big.png") as bmp, bmp.convert(mode='RGB') as large_img:
     #    start = time.time()
